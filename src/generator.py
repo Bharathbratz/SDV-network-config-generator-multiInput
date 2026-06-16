@@ -4,8 +4,8 @@ from qnx_mapper import map_interfaces, map_routes
 def generate_qnx_config(data, output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
-    interfaces = map_interfaces(data)
-    routes = map_routes(data)
+    interfaces = data.get("interfaces", [])
+    routes = data.get("routes", [])
 
     # Generate interface config
     with open(f"{output_dir}/interfaces.conf", "w") as f:
@@ -13,8 +13,9 @@ def generate_qnx_config(data, output_dir):
             f.write(f"ifconfig {iface['name']} {iface['ip']} "
                     f"netmask {iface['netmask']}\n")
 
-            if iface["vlan"]:
-                f.write(f"vlan create {iface['vlan']} {iface['name']}\n")
+            if iface.get("vlan_id") is not None:
+                f.write(f"vlan create {iface['vlan_id']} {iface['name']}\n")
+            
 
     # Generate routing config
     with open(f"{output_dir}/routes.conf", "w") as f:

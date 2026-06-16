@@ -1,5 +1,6 @@
 def map_interfaces(data):
     interfaces = []
+
     for iface in data["interfaces"]:
         interfaces.append({
             "name": iface["name"],
@@ -7,6 +8,7 @@ def map_interfaces(data):
             "ip": iface.get("ip"),
             "netmask": iface.get("netmask")
         })
+
     return interfaces
 
 
