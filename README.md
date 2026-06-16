@@ -14,10 +14,11 @@ This is part of the SDV (Software Defined Vehicle) platform to enable:
 ## ObjectiveConvert:
 
 Convert: 
+```
 Abstract Network Config (YANG JSON)
-↓
+            ↓
 QNX Network Configuration
-
+```
 ---
 
 ## Features
@@ -104,11 +105,15 @@ output/
 ├── routes.conf
 ```
 Example content:
+interfaces.conf
+```bash
 ifconfig eth0 192.168.1.10 netmask 255.255.255.0
 vlan create 100 eth0
-
+```
+routes.conf
+```bash
 route add 0.0.0.0/0 192.168.1.1
-
+```
 ---
 
 ## Testing
@@ -148,3 +153,4 @@ Work in Progress – PoC Phase
 
 
 ---
+
