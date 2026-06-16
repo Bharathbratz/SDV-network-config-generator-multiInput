@@ -1,0 +1,38 @@
+module network {
+  namespace "urn:network";
+  prefix net;
+
+  container network-config {
+    list interfaces {
+      key "name";
+
+      leaf name {
+        type string;
+      }
+
+      leaf vlan_id {
+        type uint16;
+      }
+
+      leaf ip {
+        type string;
+      }
+
+      leaf netmask {
+        type string;
+      }
+    }
+
+    list routes {
+      key "destination";
+
+      leaf destination {
+        type string;
+      }
+
+      leaf gateway {
+        type string;
+      }
+    }
+  }
+}
