@@ -38,6 +38,7 @@ QNX Network Configuration
 
 ## Project Structure
 
+```
 sdn-qnx-generator/
 │
 ├── models/       # YANG models
@@ -48,27 +49,34 @@ sdn-qnx-generator/
 ├── requirements.txt
 └── README.md
 
+```
 ---
 
 ## Setup
 
 ### Install dependencies
+```bash
 sudo apt update
 sudo apt install python3 python3-venv python3-pip -y
-
+```
 
 ### Create virtual environment
+```bash
 python3 -m venv venv
 source venv/bin/activate
-
+```
 ### Install Python packages
+```bash
 pip install -r requirements.txt
+```
 
 ## Usage
 Run the generator:
+```bash
 python src/main.py --input input/config.json --output output/
-
+```
 Input Format (Example JSON)
+```bash
 {
   "interfaces": [
     {
@@ -86,30 +94,37 @@ Input Format (Example JSON)
   ]
 }
 
+```
 
 Output Files
 Example generated files:
+```
 output/
 ├── interfaces.conf
 ├── routes.conf
-
+```
 Example content:
 ifconfig eth0 192.168.1.10 netmask 255.255.255.0
 vlan create 100 eth0
 
 route add 0.0.0.0/0 192.168.1.1
 
+---
 
 ## Testing
 Run basic test:
+```bash
 python src/main.py --input input/config.json --output output/
-
+```
 Verify output:
+```bash
 ls output/
-
+```
 ## CI/CD Integration
 This tool is designed to run in CI pipelines:
+```bash
 python src/main.py --input config.json --output build/qnx_config/
+```
 
 ## Limitations
 - Partial YANG model support (initial phase)
@@ -130,5 +145,6 @@ python src/main.py --input config.json --output build/qnx_config/
 
 ## Status
 Work in Progress – PoC Phase
+
 
 ---
