@@ -1,174 +1,183 @@
-# SDN QNX Generator
+# SDN Config Generator
 
 ## Overview
 
-This project provides a **CLI-based SDN configuration generator** that converts an abstract, vendor-independent network configuration (based on YANG JSON models) into **QNX-specific network configuration files**.
+This project is a CLI-based SDN configuration generator that converts a vendor-neutral JSON network model into OS-specific network configuration files.
 
-This is part of the SDV (Software Defined Vehicle) platform to enable:
-- Automated network configuration
-- OS-independent networking abstraction
-- CI/CD-based configuration generation
+It currently supports:
 
----
+- QNX
+- Android
+- Linux
 
-## ObjectiveConvert:
+## What Is Achieved
 
-Convert: 
+The current implementation delivers the following checklist:
+
+- Parallel execution engine for all plugins when `--os all` is used
+- Dynamic plugin loading via entry points with fallback auto-loading
+- Clean CLI orchestration from parse to validate to map to generate
+- Multi-OS generator outputs (QNX, Android, Linux)
+- Plugin SDK architecture (`BasePlugin`, renderer, registry)
+- Production-grade structure (`src/core`, `src/plugins`, `src/sdk`, packaging metadata)
+
+## Architecture
+
+### Flow
+
+```text
+Input JSON
+   -> parser
+   -> validator
+   -> mapper
+   -> plugin registry
+   -> one or many OS plugins
+   -> generated config files
 ```
-Abstract Network Config (YANG JSON)
-            ↓
-QNX Network Configuration
-```
----
 
-## Features
+### Key Components
 
-- Parse JSON-based network configuration
-- Generate:
-  - VLAN configuration
-  - IP configuration
-  - Routing table
-- CLI-based (non-interactive)
-- CI compatible
-- Extensible for:
-  - TSN (IEEE 802.1Qav)
-  - Time synchronization
-  - DNS configuration
-
----
+- `src/main.py`: CLI entrypoint and orchestration
+- `src/core/parser.py`: JSON parsing + validation trigger
+- `src/core/validator.py`: schema/rule validation (interfaces, VLAN, TSN, routes)
+- `src/core/mapper.py`: normalized internal mapping used by generators
+- `src/sdk/base_plugin.py`: plugin abstraction
+- `src/sdk/render_template.py`: shared Jinja2 rendering utility
+- `src/sdk/registry.py`: plugin discovery + runtime registry
+- `src/plugins/<os>/plugin.py`: OS-specific generation logic
 
 ## Project Structure
 
-```
+```text
 sdn-config-generator/
-│
 ├── src/
 │   ├── core/
 │   ├── plugins/
+│   │   ├── qnx/
+│   │   ├── android/
+│   │   └── linux/
 │   ├── sdk/
 │   └── main.py
 ├── input/
 ├── output/
 ├── models/
 ├── pyproject.toml
-├── README.md
 ├── requirements.txt
-└── setup.cfg (optional)
-
+└── README.md
 ```
----
 
 ## Setup
 
-### Install dependencies
-```bash
-sudo apt update
-sudo apt install python3 python3-venv python3-pip -y
-```
+### 1. Create and activate virtual environment
 
-### Create virtual environment
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
-### Install Python packages
+
+### 2. Install dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
+### 3. Optional: install package in editable mode
+
+```bash
+pip install -e .
+```
+
 ## Usage
-Run the generator: All
+
+Run all plugins in parallel:
+
 ```bash
-python -m src.main   --input input/vehicle_config.json   --output output   --os all
+python -m src.main --input input/vehicle_config.json --output output --os all
 ```
-Run the generator: Linux
+
+Run a single plugin:
+
 ```bash
-python -m src.main   --input input/vehicle_config.json   --output output   --os linux
+python -m src.main --input input/vehicle_config.json --output output --os qnx
+python -m src.main --input input/vehicle_config.json --output output --os android
+python -m src.main --input input/vehicle_config.json --output output --os linux
 ```
-Run the generator: QNX
-```bash
-python -m src.main   --input input/vehicle_config.json   --output output   --os qnx
-```
-Run the generator: Android
-```bash
-python -m src.main   --input input/vehicle_config.json   --output output   --os android
-```
-Input Format (Example JSON)
-```bash
+
+## Input Format
+
+Example (top-level or under `network-config` is supported):
+
+```json
 {
-  "interfaces": [
-    {
-      "name": "eth0",
-      "vlan_id": 100,
-      "ip": "192.168.1.10",
-      "netmask": "255.255.255.0"
-    }
-  ],
-  "routes": [
-    {
-      "destination": "0.0.0.0/0",
-      "gateway": "192.168.1.1"
-    }
-  ]
+  "network-config": {
+    "interfaces": [
+      {
+        "name": "eth0",
+        "vlan_id": 100,
+        "ip": "192.168.1.10",
+        "netmask": "255.255.255.0",
+        "tsn": {
+          "bandwidth": 75,
+          "priority": 3
+        }
+      }
+    ],
+    "routes": [
+      {
+        "destination": "0.0.0.0/0",
+        "gateway": "192.168.1.1"
+      }
+    ]
+  }
 }
-
 ```
 
-Output Files
-Example generated files:
-```
+## Output Layout
+
+When `--os all` is used, output is grouped by plugin:
+
+```text
 output/
-├── interfaces.conf
-├── routes.conf
-```
-Example content:
-interfaces.conf
-```bash
-ifconfig eth0 192.168.1.10 netmask 255.255.255.0
-vlan create 100 eth0
-```
-routes.conf
-```bash
-route add 0.0.0.0/0 192.168.1.1
-```
----
-
-## Testing
-Run basic test:
-```bash
-python src/main.py --input input/config.json --output output/
-```
-Verify output:
-```bash
-ls output/
-```
-## CI/CD Integration
-This tool is designed to run in CI pipelines:
-```bash
-python src/main.py --input config.json --output build/qnx_config/
+├── qnx/
+│   ├── interfaces.conf
+│   └── routes.conf
+├── android/
+│   └── interfaces.conf
+└── linux/
+    └── interfaces.conf
 ```
 
-## Limitations
-- Partial YANG model support (initial phase)
-- Time synchronization not fully implemented
-- No runtime configuration (build-time only)
+## Validation and Safety Checks
 
+Current validation includes:
 
-## Future Enhancements
-- Full YANG validation (libyang)
-- TSN (IEEE 802.1Qav) configuration
-- DNS and time sync configuration
-- Integration with SDN controller pipeline
-- Support for Android / Linux generators
+- Required interface fields (`name`, `ip`, `netmask`)
+- IP/gateway validation
+- VLAN range validation (`1-4094`)
+- TSN validation (`bandwidth` and `priority` bounds)
+- Route structure validation
 
+## Plugin Discovery Behavior
 
-## Team
-- SDN1 Team – SDV Platform Development
+Registry loading strategy:
 
-## Status
-Work in Progress – PoC Phase
+1. Try loading plugins from entry points group `sdn.plugins`
+2. If none are found or loading fails, fallback to built-in plugin imports
 
+This ensures generation still works during local development runs.
 
----
+## Example Success Output
 
+```text
+Available plugins: ['qnx', 'android', 'linux']
+Validation passed
+Completed plugin: android
+Completed plugin: linux
+Completed plugin: qnx
+Config generation completed for: all
+```
+
+## Current Status
+
+Stable for development use with multi-OS generation and plugin-based extensibility.
 
