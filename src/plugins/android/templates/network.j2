@@ -1,0 +1,12 @@
+# Android Network Configuration
+
+{% for iface in interfaces %}
+setprop net.{{ iface.name }}.ip {{ iface.ip }}
+{% if iface.vlan is not none %}
+# VLAN {{ iface.vlan }} on {{ iface.name }}
+{% endif %}
+{% endfor %}
+
+{% for route in routes %}
+ip route add {{ route.destination }} via {{ route.gateway }}
+{% endfor %}

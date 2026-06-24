@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+setup.cfg
+sdn_config_generator.egg-info/PKG-INFO
+sdn_config_generator.egg-info/SOURCES.txt
+sdn_config_generator.egg-info/dependency_links.txt
+sdn_config_generator.egg-info/top_level.txt

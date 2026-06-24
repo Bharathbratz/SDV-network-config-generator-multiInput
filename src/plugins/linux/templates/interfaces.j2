@@ -1,0 +1,18 @@
+# Linux Interfaces
+
+{% for iface in interfaces %}
+auto {{ iface.name }}
+iface {{ iface.name }} inet static
+    address {{ iface.ip }}
+    netmask {{ iface.netmask }}
+
+{% if iface.vlan is not none %}
+    vlan-raw-device {{ iface.name }}
+{% endif %}
+
+{% endfor %}
+
+# Routes (inline for Linux)
+{% for route in routes %}
+up ip route add {{ route.destination }} via {{ route.gateway }}
+{% endfor %}

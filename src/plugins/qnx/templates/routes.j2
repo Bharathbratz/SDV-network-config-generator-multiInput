@@ -1,0 +1,5 @@
+{# Routing Configuration #}
+
+{% for route in routes %}
+route add {{ route.destination }} {{ route.gateway }}
+{% endfor %}

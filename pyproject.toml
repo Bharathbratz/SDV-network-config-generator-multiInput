@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sdn-config-generator"
+version = "0.1.0"
+description = "SDN Multi-OS Config Generator"
+authors = [
+    { name="SDN Team" }
+]
+dependencies = [
+    "click",
+    "jinja2"
+]
+
+# ✅ ENTRY POINTS (THIS IS WHAT YOU NEED)
+[project.entry-points."sdn.plugins"]
+qnx = "plugins.qnx.plugin:QNXPlugin"
+android = "plugins.android.plugin:AndroidPlugin"
+linux = "plugins.linux.plugin:LinuxPlugin"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["core", "core.*", "plugins", "plugins.*", "sdk", "sdk.*"]

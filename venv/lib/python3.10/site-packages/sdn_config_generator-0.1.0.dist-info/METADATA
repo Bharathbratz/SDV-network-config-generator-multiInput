@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: sdn-config-generator
+Version: 0.1.0
+Summary: SDN Multi-OS Config Generator
+Author: SDN Team
+Requires-Dist: click
+Requires-Dist: jinja2

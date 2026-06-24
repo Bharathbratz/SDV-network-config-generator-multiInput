@@ -1,0 +1,15 @@
+{# QNX Network Interface Configuration #}
+
+{% for iface in interfaces %}
+ifconfig {{ iface.name }} {{ iface.ip }} netmask {{ iface.netmask }}
+
+{% if iface.vlan is not none %}
+vlan create {{ iface.vlan }} {{ iface.name }}
+{% endif %}
+
+{% if iface.tsn %}
+# TSN Configuration
+tsn config {{ iface.name }} bandwidth {{ iface.tsn.bandwidth }} priority {{ iface.tsn.priority }}
+{% endif %}
+
+{% endfor %}
