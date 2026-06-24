@@ -40,15 +40,20 @@ QNX Network Configuration
 ## Project Structure
 
 ```
-sdn-qnx-generator/
+sdn-config-generator/
 │
-├── models/       # YANG models
-├── input/        # JSON input files
-├── output/       # Generated QNX configs
-├── src/          # Source code
-├── tests/        # Test cases
+├── src/
+│   ├── core/
+│   ├── plugins/
+│   ├── sdk/
+│   └── main.py
+├── input/
+├── output/
+├── models/
+├── pyproject.toml
+├── README.md
 ├── requirements.txt
-└── README.md
+└── setup.cfg (optional)
 
 ```
 ---

@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV=/home/bhbr274381/work/sdn-qnx-generator/venv
+VIRTUAL_ENV=/home/bhbr274381/workspace/sdn-config-generator/venv
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
