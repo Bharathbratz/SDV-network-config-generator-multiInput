@@ -77,9 +77,21 @@ pip install -r requirements.txt
 ```
 
 ## Usage
-Run the generator:
+Run the generator: All
 ```bash
-python src/main.py --input input/config.json --output output/
+python -m src.main   --input input/vehicle_config.json   --output output   --os all
+```
+Run the generator: Linux
+```bash
+python -m src.main   --input input/vehicle_config.json   --output output   --os linux
+```
+Run the generator: QNX
+```bash
+python -m src.main   --input input/vehicle_config.json   --output output   --os qnx
+```
+Run the generator: Android
+```bash
+python -m src.main   --input input/vehicle_config.json   --output output   --os android
 ```
 Input Format (Example JSON)
 ```bash
@@ -158,4 +170,5 @@ Work in Progress – PoC Phase
 
 
 ---
+
 
