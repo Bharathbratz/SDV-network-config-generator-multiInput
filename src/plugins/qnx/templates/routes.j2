@@ -1,4 +1,5 @@
-{# Routing Configuration #}
+{# QNX Static Routes #}
+# Hostname: {{ hostname }}
 
 {% for route in routes %}
 route add {{ route.destination }} {{ route.gateway }}

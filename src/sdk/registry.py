@@ -29,9 +29,11 @@ class PluginRegistry:
     def _load_plugins_fallback(self):
         """Fallback: manually import plugins if entry_points fails"""
         plugin_specs = [
-            ("qnx", "src.plugins.qnx.plugin", "QNXPlugin"),
             ("android", "src.plugins.android.plugin", "AndroidPlugin"),
-            ("linux", "src.plugins.linux.plugin", "LinuxPlugin"),
+            ("linux",   "src.plugins.linux.plugin",   "LinuxPlugin"),
+            ("mcu",     "src.plugins.mcu.plugin",     "MCUPlugin"),
+            ("qnx",     "src.plugins.qnx.plugin",     "QNXPlugin"),
+            ("switch",  "src.plugins.switch.plugin",  "SwitchPlugin"),
         ]
         
         for name, module_name, class_name in plugin_specs:

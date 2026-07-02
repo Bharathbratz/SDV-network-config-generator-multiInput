@@ -1,4 +1,6 @@
 [sdn.plugins]
 android = plugins.android.plugin:AndroidPlugin
 linux = plugins.linux.plugin:LinuxPlugin
+mcu = plugins.mcu.plugin:MCUPlugin
 qnx = plugins.qnx.plugin:QNXPlugin
+switch = plugins.switch.plugin:SwitchPlugin

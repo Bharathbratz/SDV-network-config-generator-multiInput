@@ -6,12 +6,17 @@ src/main.py
 src/core/mapper.py
 src/core/model.py
 src/core/parser.py
+src/core/validator.py
 src/plugins/android/__init__.py
 src/plugins/android/plugin.py
 src/plugins/linux/__init__.py
 src/plugins/linux/plugin.py
+src/plugins/mcu/__init__.py
+src/plugins/mcu/plugin.py
 src/plugins/qnx/__init__.py
 src/plugins/qnx/plugin.py
+src/plugins/switch/__init__.py
+src/plugins/switch/plugin.py
 src/sdk/base_plugin.py
 src/sdk/capabilities.py
 src/sdk/registry.py

@@ -14,11 +14,13 @@ dependencies = [
     "jinja2"
 ]
 
-# ✅ ENTRY POINTS (THIS IS WHAT YOU NEED)
+# ✅ ENTRY POINTS — all five ECU target plugins
 [project.entry-points."sdn.plugins"]
-qnx = "plugins.qnx.plugin:QNXPlugin"
 android = "plugins.android.plugin:AndroidPlugin"
-linux = "plugins.linux.plugin:LinuxPlugin"
+linux   = "plugins.linux.plugin:LinuxPlugin"
+mcu     = "plugins.mcu.plugin:MCUPlugin"
+qnx     = "plugins.qnx.plugin:QNXPlugin"
+switch  = "plugins.switch.plugin:SwitchPlugin"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

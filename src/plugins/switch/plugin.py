@@ -3,7 +3,9 @@ from src.sdk.render_template import render_template
 import os
 
 
-class QNXPlugin(BasePlugin):
+class SwitchPlugin(BasePlugin):
+    name = "switch"
+    capabilities = ["vlan", "routes"]
 
     def generate(self, config, output_dir):
         base_path = os.path.dirname(__file__)
@@ -13,12 +15,5 @@ class QNXPlugin(BasePlugin):
             template_path,
             "interfaces.j2",
             config,
-            f"{output_dir}/interfaces.conf"
-        )
-
-        render_template(
-            template_path,
-            "routes.j2",
-            config,
-            f"{output_dir}/routes.conf"
+            f"{output_dir}/switch.conf",
         )

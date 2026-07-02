@@ -1,67 +1,128 @@
 import json
 import ipaddress
-from src.core.validator import validate_against_yang
+from src.core.validator import validate_normalized, validate_against_yang
 
-def validate_ip(ip):
-    try:
-        ipaddress.ip_address(ip)
-    except ValueError:
-        raise ValueError(f"Invalid IP address: {ip}")
 
-def validate_basic(data):
-    if "network-config" not in data:
-        raise ValueError("Missing 'network-config'")
+def _prefix_to_netmask(prefix_length: int) -> str:
+    """Convert CIDR prefix length to dotted-decimal subnet mask."""
+    if prefix_length == 0:
+        return "0.0.0.0"
+    bits = (0xFFFFFFFF >> (32 - prefix_length)) << (32 - prefix_length)
+    return (f"{(bits >> 24) & 0xFF}.{(bits >> 16) & 0xFF}."
+            f"{(bits >> 8) & 0xFF}.{bits & 0xFF}")
 
-    cfg = data["network-config"]
 
-    if "interfaces" not in cfg:
-        raise ValueError("Missing interfaces")
+def normalize_ietf(raw: dict) -> dict:
+    """Normalize IETF-namespaced JSON (RFC 8343/8349/7317) into the internal
+    SDV network model consumed by all plugins.
 
-    for iface in cfg["interfaces"]:
+    Input keys handled:
+      ietf-interfaces:interfaces  → interfaces[]
+      ietf-routing:routing        → routes[]
+      ietf-system:system          → hostname, dns_servers[]
+    """
+    interfaces = []
+    routes = []
+    dns_servers = []
+    hostname = ""
 
-        # Required fields
-        if "name" not in iface:
-            raise ValueError("Interface name missing")
-        if "ip" not in iface:
-            raise ValueError(f"IP missing for {iface['name']}")
-        if "netmask" not in iface:
-            raise ValueError(f"Netmask missing for {iface['name']}")
+    # ── Interfaces ───────────────────────────────────────────────────────────
+    for iface in raw.get("ietf-interfaces:interfaces", {}).get("interface", []):
+        name = iface["name"]
+        iface_type = iface.get("type", "")
+        enabled = iface.get("enabled", True)
+        max_frame_size = iface.get("ietf-if-extensions:max-frame-size")
 
-        # ✅ VLAN validation
-        vlan_id = iface.get("vlan_id")
-        if vlan_id is not None:
-            if not (1 <= vlan_id <= 4094):
-                raise ValueError(
-                    f"Invalid VLAN ID {vlan_id} for {iface['name']} (valid range 1–4094)"
-                )
-        # ✅ TSN Validation
-        tsn = iface.get("tsn")
-        if tsn:
-            if "bandwidth" not in tsn or not (0 < tsn["bandwidth"] <= 100):
-                raise ValueError("Invalid TSN bandwidth (1–100)")
-            if "priority" not in tsn or not (0 <= tsn["priority"] <= 7):
-                raise ValueError("Invalid TSN priority (0–7)")
+        if "ethernetCsmacd" in iface_type:
+            # Physical Ethernet interface
+            eth = iface.get("ietf-if-ethernet-like:ethernet-like", {})
+            interfaces.append({
+                "name": name,
+                "type": "ethernet",
+                "enabled": enabled,
+                "mac_address": eth.get("mac-address"),
+                "max_frame_size": max_frame_size,
+            })
 
-    print("✅ Validation passed (including VLAN range)")
-    print("✅ Validation passed for  TSN)")
+        elif "l2vlan" in iface_type:
+            # IEEE 802.1Q VLAN sub-interface
+            outer_tag = (
+                iface.get("ietf-if-extensions:encapsulation", {})
+                     .get("ietf-if-vlan-encapsulation:dot1q-vlan", {})
+                     .get("outer-tag", {})
+            )
+            vlan_id = outer_tag.get("vlan-id")
+            parent = iface.get("ietf-if-extensions:parent-interface")
+
+            addrs = iface.get("ietf-ip:ipv4", {}).get("address", [])
+            ip = netmask = None
+            prefix_length = None
+            if addrs:
+                ip = addrs[0].get("ip")
+                prefix_length = addrs[0].get("prefix-length")
+                if prefix_length is not None:
+                    netmask = _prefix_to_netmask(prefix_length)
+
+            interfaces.append({
+                "name": name,
+                "type": "vlan",
+                "enabled": enabled,
+                "parent": parent,
+                "vlan_id": vlan_id,
+                "ip": ip,
+                "prefix_length": prefix_length,
+                "netmask": netmask,
+                "max_frame_size": max_frame_size,
+            })
+
+    # ── Static routes ────────────────────────────────────────────────────────
+    protocols = (
+        raw.get("ietf-routing:routing", {})
+           .get("control-plane-protocols", {})
+           .get("control-plane-protocol", [])
+    )
+    for proto in protocols:
+        for r in (proto.get("static-routes", {})
+                       .get("ietf-ipv4-unicast-routing:ipv4", {})
+                       .get("route", [])):
+            routes.append({
+                "destination": r["destination-prefix"],
+                "gateway": r["next-hop"]["next-hop-address"],
+            })
+
+    # ── System / DNS ─────────────────────────────────────────────────────────
+    system = raw.get("ietf-system:system", {})
+    hostname = system.get("hostname", "")
+    for srv in system.get("dns-resolver", {}).get("server", []):
+        addr = srv.get("udp-and-tcp", {}).get("address")
+        if addr:
+            dns_servers.append(addr)
+
+    model = {
+        "hostname": hostname,
+        "interfaces": interfaces,
+        "routes": routes,
+        "dns_servers": dns_servers,
+    }
+
+    validate_normalized(model)
+    return model
+
 
 def parse_json_data(data: dict) -> dict:
-    """
-    Parse JSON from already loaded data (UI use case)
-    """
-
+    """Parse from an already-loaded dict. Auto-detects IETF vs legacy format."""
+    if "ietf-interfaces:interfaces" in data:
+        return normalize_ietf(data)
+    # Legacy flat format
     config = data.get("network-config", data)
-
     validate_against_yang(config)
-
     return config
 
 
 def parse_json(file_path: str) -> dict:
-    """Parse configuration JSON from file path and validate it."""
+    """Parse a configuration JSON file. Auto-detects IETF vs legacy format."""
     with open(file_path, "r") as f:
         data = json.load(f)
-
     return parse_json_data(data)
 
 

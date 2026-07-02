@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# sdn-gen — run the SDN Config Generator from the project root.
+# Usage:
+#   ./sdn-gen --input <file.json> --output <dir> [--os linux|qnx|android|mcu|switch|all]
+#   ./sdn-gen --list-plugins
+#
+# Activates the project venv automatically if present.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Activate venv if available
+if [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
+    source "$SCRIPT_DIR/venv/bin/activate"
+fi
+
+# Add src/ to PYTHONPATH so bare imports (core.*, sdk.*) resolve in development
+export PYTHONPATH="$SCRIPT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+
+exec python -m main "$@"

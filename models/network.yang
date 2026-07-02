@@ -1,37 +1,126 @@
-module network {
-  namespace "urn:network";
-  prefix net;
+// SDV (Software Defined Vehicle) Network Configuration YANG Model
+// Based on: IETF RFC 8343 (ietf-interfaces), RFC 8349 (ietf-routing),
+//           RFC 7317 (ietf-system), IEEE 802.1Q (VLAN encapsulation)
+// Mantra: "Static in-vehicle network into a programmable, dynamic, service-aware network"
+
+module ietf-sdv-network {
+  namespace "urn:sdv:network:config";
+  prefix sdv;
+
+  description
+    "YANG model for SDV in-vehicle network configuration.
+     Supports vendor-independent SDN-driven configuration for
+     automotive ECUs (Android IVI, Linux MPU, QNX RTOS, MCU, Switch CPU).
+     Normalised from IETF-namespaced JSON (ietf-interfaces:interfaces,
+     ietf-routing:routing, ietf-system:system).";
 
   container network-config {
+    description "Top-level SDV node network configuration";
+
+    leaf hostname {
+      type string;
+      description "ECU/node hostname identifier (e.g. IVI_Android, FZCU_MPU)";
+    }
+
     list interfaces {
       key "name";
+      description
+        "Network interfaces: physical Ethernet and IEEE 802.1Q VLAN sub-interfaces.
+         Maps to ietf-interfaces:interfaces/interface list.";
 
       leaf name {
         type string;
+        description "Interface name (e.g. eth1, eth1.10, eth1.2049)";
       }
 
-      leaf vlan_id {
-        type uint16;
+      leaf type {
+        type enumeration {
+          enum ethernet {
+            description "Physical Ethernet (iana-if-type:ethernetCsmacd)";
+          }
+          enum vlan {
+            description "IEEE 802.1Q VLAN sub-interface (iana-if-type:l2vlan)";
+          }
+        }
+        description "Interface type derived from iana-if-type";
+      }
+
+      leaf enabled {
+        type boolean;
+        default true;
+        description "Administrative state (ietf-interfaces:enabled)";
+      }
+
+      leaf mac-address {
+        type string {
+          pattern '[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}';
+        }
+        description "IEEE 802 MAC address (ietf-if-ethernet-like:mac-address)";
+      }
+
+      leaf parent-interface {
+        type string;
+        description
+          "Parent physical interface for VLAN sub-interfaces
+           (ietf-if-extensions:parent-interface)";
+      }
+
+      leaf vlan-id {
+        type uint16 {
+          range "1..4094";
+        }
+        description "IEEE 802.1Q VLAN identifier (dot1q-vlan outer-tag vlan-id)";
       }
 
       leaf ip {
         type string;
+        description "IPv4 address (ietf-ip:ipv4/address/ip)";
+      }
+
+      leaf prefix-length {
+        type uint8 {
+          range "0..32";
+        }
+        description "IPv4 prefix length in CIDR notation (ietf-ip:ipv4/address/prefix-length)";
       }
 
       leaf netmask {
         type string;
+        description "IPv4 subnet mask in dotted-decimal (derived from prefix-length)";
+      }
+
+      leaf max-frame-size {
+        type uint16;
+        description "Maximum Ethernet frame size in bytes (ietf-if-extensions:max-frame-size)";
       }
     }
 
     list routes {
       key "destination";
+      description
+        "Static IPv4 routes.
+         Maps to ietf-routing:routing/control-plane-protocols static-routes.";
 
       leaf destination {
         type string;
+        description "Destination prefix in CIDR notation (destination-prefix)";
       }
 
       leaf gateway {
         type string;
+        description "Next-hop gateway IPv4 address (next-hop-address)";
+      }
+    }
+
+    list dns-servers {
+      key "address";
+      description
+        "DNS resolver server addresses.
+         Maps to ietf-system:system/dns-resolver/server.";
+
+      leaf address {
+        type string;
+        description "DNS server IPv4 address (udp-and-tcp/address)";
       }
     }
   }

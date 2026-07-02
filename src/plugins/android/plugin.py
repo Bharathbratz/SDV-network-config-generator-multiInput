@@ -6,10 +6,12 @@ import os
 class AndroidPlugin(BasePlugin):
 
     def generate(self, config, output_dir):
+        base_path = os.path.dirname(__file__)
+        template_path = os.path.join(base_path, "templates")
 
         render_template(
-            "src/plugins/android/templates",  
-            "network.j2",                      
+            template_path,
+            "network.j2",
             config,
             f"{output_dir}/interfaces.conf"
         )
