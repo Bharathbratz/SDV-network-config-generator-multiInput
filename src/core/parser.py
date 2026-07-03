@@ -1,10 +1,36 @@
+"""JSON parsing and normalization for SDN config generation.
+
+This module is responsible for:
+- reading input JSON files
+- detecting supported source formats
+- converting payloads into a plugin-ready internal model
+
+Validation is intentionally handled by the validator service.
+"""
+
 import json
-import ipaddress
-from src.core.validator import validate_normalized, validate_against_yang
+from dataclasses import dataclass
+
+from src.core.mapper import map_data
+
+
+@dataclass(frozen=True)
+class ParsedConfig:
+    """Immutable parser result consumed by orchestrator and validator.
+
+    Attributes:
+        model: Plugin-ready internal model.
+        source_format: Input format identifier ("ietf" or "legacy").
+        source_config: Source-shaped config used by validator.
+    """
+
+    model: dict
+    source_format: str
+    source_config: dict
 
 
 def _prefix_to_netmask(prefix_length: int) -> str:
-    """Convert CIDR prefix length to dotted-decimal subnet mask."""
+    """Convert a CIDR prefix length into dotted-decimal netmask."""
     if prefix_length == 0:
         return "0.0.0.0"
     bits = (0xFFFFFFFF >> (32 - prefix_length)) << (32 - prefix_length)
@@ -12,7 +38,7 @@ def _prefix_to_netmask(prefix_length: int) -> str:
             f"{(bits >> 8) & 0xFF}.{bits & 0xFF}")
 
 
-def normalize_ietf(raw: dict) -> dict:
+def _normalize_ietf(raw: dict) -> dict:
     """Normalize IETF-namespaced JSON (RFC 8343/8349/7317) into the internal
     SDV network model consumed by all plugins.
 
@@ -21,6 +47,7 @@ def normalize_ietf(raw: dict) -> dict:
       ietf-routing:routing        → routes[]
       ietf-system:system          → hostname, dns_servers[]
     """
+    # Output model sections consumed directly by plugin templates.
     interfaces = []
     routes = []
     dns_servers = []
@@ -98,6 +125,7 @@ def normalize_ietf(raw: dict) -> dict:
         if addr:
             dns_servers.append(addr)
 
+    # Canonical internal model used by all plugin generators.
     model = {
         "hostname": hostname,
         "interfaces": interfaces,
@@ -105,24 +133,35 @@ def normalize_ietf(raw: dict) -> dict:
         "dns_servers": dns_servers,
     }
 
-    validate_normalized(model)
     return model
 
 
-def parse_json_data(data: dict) -> dict:
-    """Parse from an already-loaded dict. Auto-detects IETF vs legacy format."""
+def _parse_json_data(data: dict) -> ParsedConfig:
+    """Parse an in-memory JSON object and detect supported source format.
+
+    Returns:
+        ParsedConfig with both plugin-ready model and source-shape metadata.
+    """
     if "ietf-interfaces:interfaces" in data:
-        return normalize_ietf(data)
+        # IETF/RFC namespaced payload -> normalize into internal model.
+        model = _normalize_ietf(data)
+        return ParsedConfig(model=model, source_format="ietf", source_config=model)
+
     # Legacy flat format
     config = data.get("network-config", data)
-    validate_against_yang(config)
-    return config
+    model = map_data(config)
+    return ParsedConfig(model=model, source_format="legacy", source_config=config)
 
 
-def parse_json(file_path: str) -> dict:
-    """Parse a configuration JSON file. Auto-detects IETF vs legacy format."""
-    with open(file_path, "r") as f:
+def parse_json(file_path: str) -> ParsedConfig:
+    """Read and parse one configuration JSON file.
+
+    Args:
+        file_path: Absolute or relative path to an input JSON file.
+
+    Returns:
+        ParsedConfig containing model + source metadata for validator routing.
+    """
+    with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    return parse_json_data(data)
-
-
+    return _parse_json_data(data)

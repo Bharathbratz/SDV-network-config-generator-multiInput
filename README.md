@@ -2,13 +2,19 @@
 
 ## Overview
 
-This project is a CLI-based SDN configuration generator that converts a vendor-neutral JSON network model into OS-specific network configuration files.
+- A CLI-based
+- Network configuration generator
+- that converts a vendor-agnostic network JSON (based on YANG data model)
+- into OS-specific network configuration file(s).
 
-It currently supports:
+## Current Status
 
-- QNX
-- Android
-- Linux
+Stable for development use with multi-OS generation and plugin-based extensibility.
+
+- Supported OS:
+  - QNX
+  - Android
+  - Linux
 
 ## What Is Achieved
 
@@ -16,10 +22,30 @@ The current implementation delivers the following checklist:
 
 - Parallel execution engine for all plugins when `--os all` is used
 - Dynamic plugin loading via entry points with fallback auto-loading
-- Clean CLI orchestration from parse to validate to map to generate
-- Multi-OS generator outputs (QNX, Android, Linux)
+- Clean CLI orchestration from `parse` to `validate` to `map` to `generate`
+- Multi-OS generator outputs: `QNX`, `Android`, `Linux`
 - Plugin SDK architecture (`BasePlugin`, renderer, registry)
 - Production-grade structure (`src/core`, `src/plugins`, `src/sdk`, packaging metadata)
+
+## Project Structure
+
+```text
+sdn-config-generator/
+├── src/
+│   ├── core/
+│   ├── plugins/
+│   │   ├── qnx/
+│   │   ├── android/
+│   │   └── linux/
+│   ├── sdk/
+│   └── main.py
+├── input/
+├── output/
+├── models/
+├── pyproject.toml
+├── requirements.txt
+└── README.md
+```
 
 ## Architecture
 
@@ -46,29 +72,18 @@ Input JSON
 - `src/sdk/registry.py`: plugin discovery + runtime registry
 - `src/plugins/<os>/plugin.py`: OS-specific generation logic
 
-## Project Structure
-
-```text
-sdn-config-generator/
-├── src/
-│   ├── core/
-│   ├── plugins/
-│   │   ├── qnx/
-│   │   ├── android/
-│   │   └── linux/
-│   ├── sdk/
-│   └── main.py
-├── input/
-├── output/
-├── models/
-├── pyproject.toml
-├── requirements.txt
-└── README.md
-```
-
 ## Setup
 
 ### 1. Create and activate virtual environment
+
+On Debian/Ubuntu systems, you need to install the python3-venv
+package using the following command.
+
+Adjust the version.
+
+```bash
+sudo apt install python3.10-venv
+```
 
 ```bash
 python3 -m venv venv
@@ -176,8 +191,3 @@ Completed plugin: linux
 Completed plugin: qnx
 Config generation completed for: all
 ```
-
-## Current Status
-
-Stable for development use with multi-OS generation and plugin-based extensibility.
-
