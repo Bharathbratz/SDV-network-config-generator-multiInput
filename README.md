@@ -107,15 +107,15 @@ pip install -e .
 Run all plugins in parallel:
 
 ```bash
-python -m src.main --input input/vehicle_config.json --output output --os all
+python -m src.main --input input/configuration_end-station_Linux.json --output output --os all
 ```
 
 Run a single plugin:
 
 ```bash
-python -m src.main --input input/vehicle_config.json --output output --os qnx
-python -m src.main --input input/vehicle_config.json --output output --os android
-python -m src.main --input input/vehicle_config.json --output output --os linux
+python -m src.main --input input/configuration_end-station_Linux.json --output output --os qnx
+python -m src.main --input input/configuration_end-station_Linux.json --output output --os android
+python -m src.main --input input/configuration_end-station_Linux.json --output output --os linux
 ```
 
 ## Input Format
