@@ -102,23 +102,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-## Usage
-
-Run all plugins in parallel:
-
-```bash
-python -m src.main --input input/configuration_end-station_Linux.json --output output --os all
-```
-
-Run a single plugin:
-
-```bash
-python -m src.main --input input/configuration_end-station_Linux.json --output output --os qnx
-python -m src.main --input input/configuration_end-station_Linux.json --output output --os android
-python -m src.main --input input/configuration_end-station_Linux.json --output output --os linux
-```
-
-## Input Format
+## Input Json Format
 
 Example (top-level or under `network-config` is supported):
 
@@ -162,6 +146,101 @@ output/
     └── interfaces.conf
 ```
 
+## Usage
+
+Run all plugins in parallel:
+
+```bash
+python -m src.main --input input/network_config.json --output output --os all
+```
+
+Run a single plugin:
+
+```bash
+python -m src.main --input input/network_config.json --output output --os qnx
+python -m src.main --input input/network_config.json --output output --os android
+python -m src.main --input input/network_config.json --output output --os linux
+```
+## Running Tests
+
+### Unit Tests (Validator)
+
+Run all validator unit tests:
+
+```bash
+pytest tests/test_validator_unit.py -v
+```
+
+Run a specific test:
+
+```bash
+pytest tests/test_validator_unit.py::test_validate_json_accepts_valid_ietf_normalized_model -v
+```
+
+Run tests matching a pattern:
+
+```bash
+pytest tests/test_validator_unit.py -k "ietf" -v
+```
+
+### CLI Negative Path Tests
+
+Run all CLI error handling tests:
+
+```bash
+pytest tests/test_cli_negative_paths.py -v
+```
+
+Run a specific CLI test:
+
+```bash
+pytest tests/test_cli_negative_paths.py::test_invalid_os_returns_click_error -v
+```
+
+Run tests matching a pattern:
+
+```bash
+pytest tests/test_cli_negative_paths.py -k "click_error" -v
+```
+
+### All Test Options
+
+Run all tests with detailed output:
+
+```bash
+pytest tests/ -vv
+```
+
+Run tests and stop at first failure:
+
+```bash
+pytest tests/ -x -v
+```
+
+Run tests with coverage report:
+
+```bash
+pytest tests/ --cov=src --cov-report=html -v
+```
+
+Run tests with output capturing disabled (see print statements):
+
+```bash
+pytest tests/ -s -v
+```
+
+Run tests with XML report (for CI/CD):
+
+```bash
+pytest tests/ --junit-xml=report.xml -v
+```
+
+Run tests in parallel (requires pytest-xdist):
+
+```bash
+pytest tests/ -n auto -v
+```
+
 ## Validation and Safety Checks
 
 Current validation includes:
@@ -184,10 +263,12 @@ This ensures generation still works during local development runs.
 ## Example Success Output
 
 ```text
-Available plugins: ['qnx', 'android', 'linux']
-Validation passed
-Completed plugin: android
-Completed plugin: linux
-Completed plugin: qnx
-Config generation completed for: all
+✅ YANG validation passed (interfaces, routes, DNS)
+Generated: output/android/interfaces.conf
+Generated: output/linux/interfaces.conf
+Generated: output/mcu/network_config.h
+Generated: output/qnx/interfaces.conf
+Generated: output/qnx/routes.conf
+Generated: output/switch/switch.conf
+Config generation completed for plugin: all
 ```
