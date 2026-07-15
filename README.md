@@ -164,6 +164,44 @@ python -m src.main --input input/network_config.json --output output --os linux
 
 ## Running Tests
 
+### All Test Options
+
+Run all tests with detailed output:
+
+```bash
+pytest tests/ -vv
+```
+
+Run tests and stop at first failure:
+
+```bash
+pytest tests/ -x -v
+```
+
+Run tests with coverage report:
+
+```bash
+pytest tests/ --cov=src --cov-report=html -v
+```
+
+Run tests with output capturing disabled (see print statements):
+
+```bash
+pytest tests/ -s -v
+```
+
+Run tests with XML report (for CI/CD):
+
+```bash
+pytest tests/ --junit-xml=report.xml -v
+```
+
+Run tests in parallel (requires pytest-xdist):
+
+```bash
+pytest tests/ -n auto -v
+```
+
 ### Unit Tests (Validator)
 
 Run all validator unit tests:
@@ -202,44 +240,6 @@ Run tests matching a pattern:
 
 ```bash
 pytest tests/test_cli_negative_paths.py -k "click_error" -v
-```
-
-### All Test Options
-
-Run all tests with detailed output:
-
-```bash
-pytest tests/ -vv
-```
-
-Run tests and stop at first failure:
-
-```bash
-pytest tests/ -x -v
-```
-
-Run tests with coverage report:
-
-```bash
-pytest tests/ --cov=src --cov-report=html -v
-```
-
-Run tests with output capturing disabled (see print statements):
-
-```bash
-pytest tests/ -s -v
-```
-
-Run tests with XML report (for CI/CD):
-
-```bash
-pytest tests/ --junit-xml=report.xml -v
-```
-
-Run tests in parallel (requires pytest-xdist):
-
-```bash
-pytest tests/ -n auto -v
 ```
 
 ## Validation and Safety Checks
