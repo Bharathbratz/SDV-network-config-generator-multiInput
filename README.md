@@ -2,13 +2,19 @@
 
 ## Overview
 
-This project is a CLI-based SDN configuration generator that converts a vendor-neutral JSON network model into OS-specific network configuration files.
+- A CLI-based
+- Network configuration generator
+- that converts a vendor-agnostic network JSON (based on YANG data model)
+- into OS-specific network configuration file(s).
 
-It currently supports:
+## Current Status
 
-- QNX
-- Android
-- Linux
+Stable for development use with multi-OS generation and plugin-based extensibility.
+
+- Supported OS:
+  - QNX
+  - Android
+  - Linux
 
 ## What Is Achieved
 
@@ -16,10 +22,30 @@ The current implementation delivers the following checklist:
 
 - Parallel execution engine for all plugins when `--os all` is used
 - Dynamic plugin loading via entry points with fallback auto-loading
-- Clean CLI orchestration from parse to validate to map to generate
-- Multi-OS generator outputs (QNX, Android, Linux)
+- Clean CLI orchestration from `parse` to `validate` to `map` to `generate`
+- Multi-OS generator outputs: `QNX`, `Android`, `Linux`
 - Plugin SDK architecture (`BasePlugin`, renderer, registry)
 - Production-grade structure (`src/core`, `src/plugins`, `src/sdk`, packaging metadata)
+
+## Project Structure
+
+```text
+sdn-config-generator/
+├── src/
+│   ├── core/
+│   ├── plugins/
+│   │   ├── qnx/
+│   │   ├── android/
+│   │   └── linux/
+│   ├── sdk/
+│   └── main.py
+├── input/
+├── output/
+├── models/
+├── pyproject.toml
+├── requirements.txt
+└── README.md
+```
 
 ## Architecture
 
@@ -46,29 +72,18 @@ Input JSON
 - `src/sdk/registry.py`: plugin discovery + runtime registry
 - `src/plugins/<os>/plugin.py`: OS-specific generation logic
 
-## Project Structure
-
-```text
-sdn-config-generator/
-├── src/
-│   ├── core/
-│   ├── plugins/
-│   │   ├── qnx/
-│   │   ├── android/
-│   │   └── linux/
-│   ├── sdk/
-│   └── main.py
-├── input/
-├── output/
-├── models/
-├── pyproject.toml
-├── requirements.txt
-└── README.md
-```
-
 ## Setup
 
 ### 1. Create and activate virtual environment
+
+On Debian/Ubuntu systems, you need to install the python3-venv
+package using the following command.
+
+Adjust the version.
+
+```bash
+sudo apt install python3.10-venv
+```
 
 ```bash
 python3 -m venv venv
@@ -87,23 +102,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-## Usage
-
-Run all plugins in parallel:
-
-```bash
-python -m src.main --input input/vehicle_config.json --output output --os all
-```
-
-Run a single plugin:
-
-```bash
-python -m src.main --input input/vehicle_config.json --output output --os qnx
-python -m src.main --input input/vehicle_config.json --output output --os android
-python -m src.main --input input/vehicle_config.json --output output --os linux
-```
-
-## Input Format
+## Input Json Format
 
 Example (top-level or under `network-config` is supported):
 
@@ -147,6 +146,102 @@ output/
     └── interfaces.conf
 ```
 
+## Usage
+
+Run all plugins in parallel:
+
+```bash
+python -m src.main --input input/network_config.json --output output --os all
+```
+
+Run a single plugin:
+
+```bash
+python -m src.main --input input/network_config.json --output output --os qnx
+python -m src.main --input input/network_config.json --output output --os android
+python -m src.main --input input/network_config.json --output output --os linux
+```
+
+## Running Tests
+
+### All Test Options
+
+Run all tests with detailed output:
+
+```bash
+pytest tests/ -vv
+```
+
+Run tests and stop at first failure:
+
+```bash
+pytest tests/ -x -v
+```
+
+Run tests with coverage report:
+
+```bash
+pytest tests/ --cov=src --cov-report=html -v
+```
+
+Run tests with output capturing disabled (see print statements):
+
+```bash
+pytest tests/ -s -v
+```
+
+Run tests with XML report (for CI/CD):
+
+```bash
+pytest tests/ --junit-xml=report.xml -v
+```
+
+Run tests in parallel (requires pytest-xdist):
+
+```bash
+pytest tests/ -n auto -v
+```
+
+### Unit Tests (Validator)
+
+Run all validator unit tests:
+
+```bash
+pytest tests/test_validator_unit.py -v
+```
+
+Run a specific test:
+
+```bash
+pytest tests/test_validator_unit.py::test_validate_json_accepts_valid_ietf_normalized_model -v
+```
+
+Run tests matching a pattern:
+
+```bash
+pytest tests/test_validator_unit.py -k "ietf" -v
+```
+
+### CLI Negative Path Tests
+
+Run all CLI error handling tests:
+
+```bash
+pytest tests/test_cli_negative_paths.py -v
+```
+
+Run a specific CLI test:
+
+```bash
+pytest tests/test_cli_negative_paths.py::test_invalid_os_returns_click_error -v
+```
+
+Run tests matching a pattern:
+
+```bash
+pytest tests/test_cli_negative_paths.py -k "click_error" -v
+```
+
 ## Validation and Safety Checks
 
 Current validation includes:
@@ -169,15 +264,12 @@ This ensures generation still works during local development runs.
 ## Example Success Output
 
 ```text
-Available plugins: ['qnx', 'android', 'linux']
-Validation passed
-Completed plugin: android
-Completed plugin: linux
-Completed plugin: qnx
-Config generation completed for: all
+✅ YANG validation passed (interfaces, routes, DNS)
+Generated: output/android/interfaces.conf
+Generated: output/linux/interfaces.conf
+Generated: output/mcu/network_config.h
+Generated: output/qnx/interfaces.conf
+Generated: output/qnx/routes.conf
+Generated: output/switch/switch.conf
+Config generation completed for plugin: all
 ```
-
-## Current Status
-
-Stable for development use with multi-OS generation and plugin-based extensibility.
-

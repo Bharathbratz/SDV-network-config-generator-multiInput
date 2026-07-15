@@ -2,7 +2,7 @@
 venv/
 env/
 __pycache__/
-*.pyc
+*.py[cod]
 .devcontainer/.cache
 output/
 ui_output/

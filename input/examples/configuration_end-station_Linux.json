@@ -1,0 +1,128 @@
+{
+  "ietf-interfaces:interfaces": {
+    "interface": [
+      {
+        "enabled": true,
+        "ietf-if-ethernet-like:ethernet-like": {
+          "mac-address": "E4:D3:AA:96:FF:01"
+        },
+        "ietf-if-extensions:max-frame-size": 1500,
+        "name": "eth1",
+        "type": "iana-if-type:ethernetCsmacd"
+      },
+      {
+        "enabled": true,
+        "ietf-if-extensions:encapsulation": {
+          "ietf-if-vlan-encapsulation:dot1q-vlan": {
+            "outer-tag": {
+              "tag-type": "ieee802-dot1q-types:c-vlan",
+              "vlan-id": 2049
+            }
+          }
+        },
+        "ietf-if-extensions:max-frame-size": 1500,
+        "ietf-if-extensions:parent-interface": "eth1",
+        "ietf-ip:ipv4": {
+          "address": [
+            {
+              "ip": "172.24.1.11",
+              "prefix-length": 24
+            }
+          ],
+          "enabled": true
+        },
+        "name": "eth1.2049",
+        "type": "iana-if-type:l2vlan"
+      },
+      {
+        "enabled": true,
+        "ietf-if-extensions:encapsulation": {
+          "ietf-if-vlan-encapsulation:dot1q-vlan": {
+            "outer-tag": {
+              "tag-type": "ieee802-dot1q-types:c-vlan",
+              "vlan-id": 10
+            }
+          }
+        },
+        "ietf-if-extensions:max-frame-size": 1500,
+        "ietf-if-extensions:parent-interface": "eth1",
+        "ietf-ip:ipv4": {
+          "address": [
+            {
+              "ip": "172.16.10.11",
+              "prefix-length": 24
+            }
+          ],
+          "enabled": true
+        },
+        "name": "eth1.10",
+        "type": "iana-if-type:l2vlan"
+      },
+      {
+        "enabled": true,
+        "ietf-if-extensions:encapsulation": {
+          "ietf-if-vlan-encapsulation:dot1q-vlan": {
+            "outer-tag": {
+              "tag-type": "ieee802-dot1q-types:c-vlan",
+              "vlan-id": 201
+            }
+          }
+        },
+        "ietf-if-extensions:max-frame-size": 1500,
+        "ietf-if-extensions:parent-interface": "eth1",
+        "ietf-ip:ipv4": {
+          "address": [
+            {
+              "ip": "172.16.201.11",
+              "prefix-length": 24
+            }
+          ],
+          "enabled": true
+        },
+        "name": "eth1.201",
+        "type": "iana-if-type:l2vlan"
+      }
+    ]
+  },
+  "ietf-routing:routing": {
+    "control-plane-protocols": {
+      "control-plane-protocol": [
+        {
+          "name": "default",
+          "static-routes": {
+            "ietf-ipv4-unicast-routing:ipv4": {
+              "route": [
+                {
+                  "destination-prefix": "0.0.0.0/0",
+                  "next-hop": {
+                    "next-hop-address": "172.16.10.254"
+                  }
+                },
+                {
+                  "destination-prefix": "172.24.0.0/20",
+                  "next-hop": {
+                    "next-hop-address": "172.24.1.254"
+                  }
+                }
+              ]
+            }
+          },
+          "type": "ietf-routing:static"
+        }
+      ]
+    }
+  },
+  "ietf-system:system": {
+    "dns-resolver": {
+      "server": [
+        {
+          "name": "TBOX_MPU",
+          "udp-and-tcp": {
+            "address": "172.16.50.51"
+          }
+        }
+      ]
+    },
+    "hostname": "FZCU_MPU"
+  }
+}

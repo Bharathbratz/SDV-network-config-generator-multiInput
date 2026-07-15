@@ -2,3 +2,4 @@ pyang
 jsonschema
 click
 jinja2
+pytest
