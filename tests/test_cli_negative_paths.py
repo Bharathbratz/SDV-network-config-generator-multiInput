@@ -11,7 +11,7 @@ from src.main import main
 def test_invalid_os_returns_click_error(tmp_path: Path) -> None:
     """Invalid --os should fail with a clean, actionable message."""
     runner = CliRunner()
-    input_file = Path("input/configuration_end-station_Linux.json")
+    input_file = Path("input/network_config.json")
 
     result = runner.invoke(
         main,
@@ -57,7 +57,7 @@ def test_permission_denied_is_translated_to_click_error(
 ) -> None:
     """Filesystem permission failures should be translated into Click-style errors."""
     runner = CliRunner()
-    input_file = Path("input/configuration_end-station_Linux.json")
+    input_file = Path("input/network_config.json")
 
     import src.core.generator as generator
 
