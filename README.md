@@ -161,6 +161,7 @@ python -m src.main --input input/network_config.json --output output --os qnx
 python -m src.main --input input/network_config.json --output output --os android
 python -m src.main --input input/network_config.json --output output --os linux
 ```
+
 ## Running Tests
 
 ### Unit Tests (Validator)
