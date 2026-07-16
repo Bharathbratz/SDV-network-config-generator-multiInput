@@ -1,0 +1,823 @@
+= Automated Network Configuration: Architecture and Implementation
+:doctype: article
+:toc: left
+:toclevels: 4
+:sectnums:
+:sectnumlevels: 4
+:icons: font
+:source-highlighter: rouge
+:rouge-style: github
+
+// Abbreviation definitions
+:jinja2:    Jinja2
+:iproute2:  iproute2
+:systemd:   systemd
+:netd:      systemd-networkd
+:yang:      YANG
+:ietf:      IETF
+
+== Introduction
+
+This document describes the automated generation of Linux network configuration from
+structured JSON input files using {jinja2} templates.
+Two complementary configuration back-ends are covered:
+
+* **{netd}** — the native network daemon of a full `{systemd}` environment,
+  consuming declarative `.network`, `.netdev`, and `.link` unit files.
+* **iproute2 / `ip` command** — a portable shell-script-based approach suitable
+  for environments where `{systemd}-networkd` is not available (e.g.
+  a prebuilt rootfs with a stripped-down `{systemd}`) or another init system is 
+  used.
+
+Both back-ends produce the same observable network state:
+* parent Ethernet interfaces
+* IEEE 802.1Q VLAN sub-interfaces 
+* static IPv4 addresses
+* MAC assignments
+* static IPv4 routes.
+
+The configuration data is modelled in IETF YANG notation
+(`ietf-interfaces`, `ietf-routing`, …) and stored as JSON files.
+{jinja2} templates transform the JSON data into the target configuration
+artefacts at build time.
+The output is assembled in a rootfs-like directory tree that can be mounted
+at run-time via OverlayFS on a read-only base partition.
+
+[plantuml, network-config-overview, svg, opts="inline"]
+....
+@startuml
+left to right direction
+rectangle "Source" {
+  file "network.json\n(IETF/YANG)" as JSON
+}
+rectangle "Template Engine" {
+  component "Jinja2 render\n(j2yang.py)" as J2
+  folder "templates/\n*.j2" as TPL
+}
+rectangle "Back-ends" {
+  folder "systemd-networkd\n*.network *.netdev *.link" as SYSD
+  file   "ip-config.sh"  as IPSH
+}
+rectangle "Deployment" {
+  folder "overlay/\n(rootfs layout)" as OVL
+}
+JSON --> J2
+TPL  --> J2
+J2 --> SYSD : systemd path
+J2 --> IPSH : iproute2 path
+SYSD --> OVL
+IPSH --> OVL
+@enduml
+....
+
+NOTE: YANG model validation and file-integrity checking are described in
+<<sec-validation>>.
+
+== JSON Input Format
+
+All network parameters are stored in a single JSON file per network node.
+The schema follows the IETF standard data models serialised as JSON:
+
+* `ietf-interfaces:interfaces`
+  (https://www.rfc-editor.org/rfc/rfc8343[RFC 8343],
+  https://github.com/YangModels/yang/blob/main/standard/ietf/RFC/ietf-interfaces%402018-02-20.yang[YANG source])
+  — parent and VLAN interfaces.
+* `ietf-ip` augments for IPv4/IPv6 address configuration
+  (https://www.rfc-editor.org/rfc/rfc8344[RFC 8344],
+  https://github.com/YangModels/yang/blob/main/standard/ietf/RFC/ietf-ip%402018-02-22.yang[YANG source]).
+* `ietf-if-extensions` for parent-interface and encapsulation fields
+  (https://www.rfc-editor.org/rfc/rfc8795[RFC 8795],
+  https://github.com/YangModels/yang/blob/main/standard/ietf/RFC/ietf-if-extensions%402020-07-29.yang[YANG source]).
+* `ietf-if-vlan-encapsulation` for dot1q VLAN tagging
+  (https://github.com/YangModels/yang/blob/main/standard/ietf/RFC/ietf-if-vlan-encapsulation%402020-07-13.yang[YANG source]).
+* `ietf-routing:routing` + `ietf-ipv4-unicast-routing:ipv4`
+  (https://www.rfc-editor.org/rfc/rfc8349[RFC 8349],
+  https://github.com/YangModels/yang/blob/main/standard/ietf/RFC/ietf-routing%402018-03-13.yang[YANG source],
+  https://github.com/YangModels/yang/blob/main/standard/ietf/RFC/ietf-ipv4-unicast-routing%402018-03-13.yang[ipv4-unicast-routing YANG source])
+  — static routes.
+* `ietf-system:system`
+  (https://www.rfc-editor.org/rfc/rfc7317[RFC 7317],
+  https://github.com/YangModels/yang/blob/main/standard/ietf/RFC/ietf-system%402014-08-06.yang[YANG source])
+  — hostname identifying the node.
+* `iana-if-type` interface type identities
+  (https://www.iana.org/assignments/ianaiftype-mib/ianaiftype-mib[IANA ifType registry],
+  https://github.com/YangModels/yang/blob/main/standard/iana/iana-if-type.yang[YANG source]).
+* `ietf-if-ethernet-like` for MAC address fields
+  (https://www.rfc-editor.org/rfc/rfc8343[RFC 8343 augment],
+  https://github.com/YangModels/yang/blob/main/standard/ietf/RFC/ietf-if-ethernet-like%402019-03-07.yang[YANG source]).
+
+All YANG modules are maintained in the
+https://github.com/YangModels/yang[YangModels/yang GitHub repository].
+Offline copies suitable for `pyang` / `yangson` validation can be downloaded from the
+https://github.com/YangModels/yang/tree/main/standard/ietf/RFC[standard/ietf/RFC]
+and
+https://github.com/YangModels/yang/tree/main/standard/iana[standard/iana]
+directories of that repository.
+
+.Example JSON for a network node
+[source,json]
+----
+{
+  "ietf-system:system": {
+    "hostname": "mpu-node-01"
+  },
+  "ietf-interfaces:interfaces": {
+    "interface": [
+      {
+        "name": "eth1",
+        "type": "iana-if-type:ethernetCsmacd",
+        "enabled": true,
+        "ietf-if-extensions:max-frame-size": 1500,
+        "ietf-if-ethernet-like:ethernet-like": {
+          "mac-address": "F2-00-00-00-00-10"
+        }
+      },
+      {
+        "name": "eth1.2",
+        "type": "iana-if-type:l2vlan",
+        "enabled": true,
+        "ietf-if-extensions:max-frame-size": 1500,
+        "ietf-if-extensions:parent-interface": "eth1",
+        "ietf-if-extensions:encapsulation": {
+          "ietf-if-vlan-encapsulation:dot1q-vlan": {
+            "outer-tag": {
+              "tag-type": "ieee802-dot1q-types:c-vlan",
+              "vlan-id": 2
+            }
+          }
+        },
+        "ietf-ip:ipv4": {
+          "enabled": true,
+          "address": [
+            { "ip": "10.0.2.16", "prefix-length": 24 }
+          ]
+        }
+      }
+    ]
+  },
+  "ietf-routing:routing": {
+    "control-plane-protocols": {
+      "control-plane-protocol": [
+        {
+          "name": "default",
+          "type": "ietf-routing:static",
+          "static-routes": {
+            "ietf-ipv4-unicast-routing:ipv4": {
+              "route": [
+                {
+                  "destination-prefix": "0.0.0.0/0",
+                  "next-hop": {
+                    "next-hop-address": "10.0.2.1",
+                    "outgoing-interface": "eth1.2"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+----
+
+=== Interface type discrimination
+
+The template engine distinguishes interface roles by the `type` field:
+
+[cols="1,2,2", options="header"]
+|===
+| `type` value
+| Role
+| Mandatory extra fields
+
+| `iana-if-type:ethernetCsmacd`
+| Physical / parent Ethernet interface
+| `name`, `enabled`
+
+| `iana-if-type:l2vlan`
+| IEEE 802.1Q VLAN sub-interface
+| `ietf-if-extensions:parent-interface`, `ietf-if-extensions:encapsulation`
+|===
+
+== Jinja2 Templating
+
+=== What is Jinja2?
+
+{jinja2} is a fast, expressive Python template engine.
+A template is a text file that mixes static content (e.g. INI-file syntax,
+shell code) with `{{ … }}` expressions and `{% … %}` control statements.
+At render time the engine binds a Python dictionary — the _context_ — to the
+template variables and produces the final text.
+
+Key language constructs used in this project:
+
+[cols="1,2", options="header"]
+|===
+| Construct
+| Purpose
+
+| `{{ variable }}`
+| Emit the value of a variable or expression.
+
+| `{% for item in list %} … {% endfor %}`
+| Iterate over a list.
+
+| `{% if condition %} … {% elif %} … {% else %} … {% endif %}`
+| Conditional rendering.
+
+| `{{ value \| filter }}`
+| Apply a filter (e.g. `replace`, `upper`, `default`).
+
+| `{%- … -%}` (dash trim)
+| Strip whitespace / newlines adjacent to the tag.
+
+| `{# comment #}`
+| Template comment (not emitted to output).
+
+| `{% set name = value %}`
+| Assign a local variable inside the template.
+|===
+
+=== Accessing JSON data in a Jinja2 template
+
+The Python helper `j2yang.py` loads the JSON file, wraps it under the
+`data` key if not already present, and passes the resulting dictionary to
+the `{jinja2} Environment.render()` call.
+
+[source,python]
+----
+# j2yang.py — context normalisation
+def alter_context(context):
+    if "data" not in context:
+        return {"data": context}
+    else:
+        return context
+----
+
+Inside a template the entire JSON document is therefore accessible as `data`.
+Nested keys are traversed with the standard Python dict/attribute access:
+
+[source,jinja]
+----
+{# Access the hostname #}
+{{ data['ietf-system:system']['hostname'] }}
+
+{# Iterate all interfaces #}
+{% for iface in data['ietf-interfaces:interfaces']['interface'] %}
+  Name: {{ iface.name }}   Type: {{ iface.type }}
+{% endfor %}
+
+{# Check for an optional key before accessing it #}
+{% if 'ietf-ip:ipv4' in iface and 'address' in iface['ietf-ip:ipv4'] %}
+  {% for addr in iface['ietf-ip:ipv4']['address'] %}
+    IP: {{ addr['ip'] }}/{{ addr['prefix-length'] }}
+  {% endfor %}
+{% endif %}
+----
+
+TIP: Colons inside JSON keys (e.g. `ietf-ip:ipv4`) require bracket notation
+`data['ietf-ip:ipv4']` rather than dot notation `data.ietf-ip:ipv4`.
+
+=== Render invocation
+
+The Python render driver (simplified) looks like:
+
+[source,python]
+----
+import json
+from jinja2 import Environment, FileSystemLoader
+from j2yang import alter_context
+
+def render(template_file, json_file, output_file):
+    with open(json_file) as fh:
+        raw = json.load(fh)
+
+    context = alter_context(raw)
+
+    env = Environment(loader=FileSystemLoader("templates"),
+                      keep_trailing_newline=True,
+                      trim_blocks=True,
+                      lstrip_blocks=True)
+    result = env.get_template(template_file).render(**context)
+
+    with open(output_file, "w") as fh:
+        fh.write(result)
+----
+
+== systemd-networkd Back-end
+
+=== Overview
+
+`systemd-networkd` is the network manager integrated into `systemd`.
+It reads configuration from three file types placed in
+`/etc/systemd/network/` (or `/run/systemd/network/` for volatile config):
+
+[cols="1,1,2", options="header"]
+|===
+| Extension | Unit type | Purpose
+
+| `.link`
+| Link configuration
+| Rename interface, set MAC, MTU at the `udev` layer (before networkd).
+
+| `.netdev`
+| Virtual network device
+| Create virtual devices: VLAN, bridge, bond, etc.
+
+| `.network`
+| Network configuration
+| Match an interface and configure IP, VLAN list, routes, DNS, etc.
+|===
+
+Files are processed in lexicographic order, so they are prefixed with a
+two-digit priority number (e.g. `10-eth1.network`, `20-eth1.10.netdev`).
+
+=== File examples produced from the JSON above
+
+==== `.link` — rename physical interface
+
+Generated from `parent_interface_name_static.j2`:
+
+[source,ini]
+----
+[Match]
+OriginalName=pfe0
+Type=ether
+
+[Link]
+Name=eth1
+MTUBytes=1500
+----
+
+This file causes `udev` to rename the physical NIC (kernel name `pfe0`)
+to the IETF-configured name `eth1` before `systemd-networkd` starts.
+
+==== `.netdev` — VLAN virtual device
+
+Generated from `vlan_netdev.j2` for each VLAN interface:
+
+[source,ini]
+----
+[NetDev]
+Name=eth1.2
+
+Kind=vlan
+
+[VLAN]
+Id=2
+----
+
+==== `.network` — parent interface
+
+Generated from `parent_interface.j2`:
+
+[source,ini]
+----
+[Match]
+Name=eth1
+
+[Link]
+MACAddress=F2:00:00:00:00:10
+MTUBytes=1500
+
+[Network]
+VLAN=eth1.2
+----
+
+==== `.network` — VLAN sub-interface & ROUTE
+
+Generated from `vlan_network.j2`:
+
+[source,ini]
+----
+[Match]
+Name=eth1.2
+
+[Network]
+Address=10.0.2.16/24
+
+[Link]
+MTUBytes=1500
+
+[Route]
+Gateway=10.0.2.1
+Destination=0.0.0.0/0
+----
+
+=== Execution model
+
+. The Linux kernel recognises the physical NIC at boot.
+. `udev` applies the `.link` file → interface is renamed to `eth1`.
+. `systemd-networkd.service` reads `/etc/systemd/network/`.
+. For each `.netdev` file, `systemd-networkd` creates the virtual device
+  (e.g. `eth1.2` VLAN sub-interface).
+. For each `.network` file, `systemd-networkd` matches the interface by
+  name and applies the IP / route / MTU / MAC configuration.
+. `systemd-networkd` monitors carrier state and can re-apply configuration
+  on link-up events automatically.
+
+The service dependency order in a typical image:
+
+[source]
+----
+network-pre.target
+    └── systemd-udevd.service   (applies .link files)
+            └── systemd-networkd.service  (applies .netdev + .network files)
+                    └── network.target
+----
+
+=== Templates reference
+
+[cols="2,1,2", options="header"]
+|===
+| Template file
+| Output extension
+| Content
+
+| `parent_interface_name_static.j2`
+| `.link`
+| Renames the physical NIC to the YANG-configured name.
+
+| `parent_interface.j2`
+| `.network`
+| Configures MAC, MTU and VLAN list on the parent interface.
+
+| `vlan_netdev.j2`
+| `.netdev`
+| Creates one VLAN virtual device per VLAN interface.
+
+| `vlan_network.j2`
+| `.network`
+| Assigns IPv4 address, MTU, and static routes to a VLAN interface.
+
+| `systemd-route.j2` / `ip-route-zcu.j2`
+| `.sh`
+| Shell helper to add routes via `ip route replace` (platform-specific variant).
+|===
+
+== iproute2 / `ip` Command Back-end
+
+=== Overview
+
+The iproute2 back-end is used on targets where `systemd-networkd` is
+unavailable — for example, on systems that ship a prebuilt rootfs containing a
+stripped-down `systemd` without the networkd component.
+
+A single shell script (`ip-config.sh`) generated from `ip-config.sh.j2`
+executes all required `ip` commands in a fixed order:
+
+. Configure the physical (parent) interface:
+  rename if needed, set MAC, bring up.
+. Create VLAN sub-interfaces.
+. Assign IPv4 addresses.
+. Install static routes.
+
+The script is run by a dedicated `systemd` one-shot service at boot.
+
+=== Execution model
+
+. `systemd` starts `network-config.service` (a one-shot unit with
+  `RemainAfterExit=yes`) early in boot.
+. The service executes `/usr/lib/network-config/ip-config.sh`.
+. Each `ip` command is idempotent — guarded by existence checks — so the
+  script can be re-run safely.
+. The environment variable `VLAN_PARENT` can override the JSON-configured
+  parent name, enabling QEMU testing where interface names differ.
+
+.Example systemd unit
+[source,ini]
+----
+[Unit]
+Description=IP Network Configuration
+After=network-pre.target
+Before=network.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/network-config/ip-config.sh
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
+----
+
+== Overall Architecture
+
+=== Component overview
+
+[source]
+----
+tools/network-tooling/
+├── systemd-network-config/      ← systemd-networkd back-end
+│   ├── j2yang.py                ← context normaliser
+│   ├── templates/
+│   │   ├── parent_interface.j2
+│   │   ├── parent_interface_name_static.j2
+│   │   ├── vlan_netdev.j2
+│   │   ├── vlan_network.j2
+│   │   ├── ip-route-zcu.j2
+│   │   └── systemd-route.j2
+│   ├── generate_eth_vlan.sh     ← orchestration shell script
+│   ├── test_network.py          ← unit tests for .network templates
+│   ├── test_netdev.py           ← unit tests for .netdev templates
+│   └── test_vlan_route.py       ← unit tests for route rendering
+│
+└── ip-network-config/           ← iproute2 back-end
+    ├── j2yang.py
+    └── templates/
+        └── ip-config.sh.j2
+----
+
+=== Data-flow walkthrough
+
+[source]
+----
+  platform/
+  └── configuration_end-stations.json   ← multi-node source of truth
+         │
+         │  jq '.[] | select(.["ietf-system:system"].hostname=="mpu-node-01")'  # see https://jqlang.org/manual/
+         ▼
+  fzcu_mpu.json                         ← single-node JSON slice
+         │
+         │  generate_eth_vlan.sh  (systemd back-end)
+         │  OR
+         │  j2yang.py + ip-config.sh.j2 (iproute2 back-end)
+         ▼
+  generated artefacts
+  ├── 10-eth1.link
+  ├── 20-eth1.network
+  ├── 20-eth1.2.netdev
+  ├── 30-eth1.2.network
+  └── ip-config.sh
+         │
+         │  assemble into overlay tree
+         ▼
+  overlay/
+  ├── etc/systemd/network/     ← systemd-networkd files
+  │   ├── 10-eth1.link
+  │   ├── 20-eth1.network
+  │   ├── 20-eth1.2.netdev
+  │   └── 30-eth1.2.network
+  └── usr/lib/network-config/  ← iproute2 script
+      └── ip-config.sh
+----
+
+[[sec-validation]]
+== Validation
+
+=== YANG model validation of the JSON input
+
+The JSON input files follow the IETF YANG data models.
+Before rendering, the JSON data should be validated against the YANG schema.
+Informations and ressources are stored here:
+https://gitext.elektrobitautomotive.com/dath1233/yang_sdv/tree/master/src/yang_sdv
+
+Example scripts on how to validate the JSON input is located here:
+https://gitext.elektrobitautomotive.com/dath1233/yang_sdv/tree/master/src/yang_sdv/examples
+
+=== Template output integrity checks
+
+After rendering, the generated files should be verified before deployment.
+
+==== Structural checks for systemd unit files
+
+`systemd-analyze` can inspect unit files for syntax errors:
+
+[source,bash]
+----
+# Verify a .network file
+systemd-analyze cat-config systemd/network/20-eth1.network
+
+# Check a .netdev file
+systemd-analyze verify --recursive overlay/etc/systemd/network/
+----
+
+==== Script syntax check
+
+[source,bash]
+----
+# POSIX shell syntax check (no execution)
+sh -n overlay/usr/lib/network-config/ip-config.sh
+----
+
+==== Content regression tests (Python unittest)
+
+Each test renders a template with a controlled data fixture and
+asserts the exact expected output:
+
+[source,bash]
+----
+python -m unittest test_network.py   # .network template tests
+python -m unittest test_netdev.py    # .netdev template tests
+python -m unittest test_vlan_route.py
+----
+
+These tests serve as a regression guard: any template change that alters
+the rendered output will be caught immediately.
+
+==== Checksum manifest
+
+For deployment integrity, generate a SHA-256 manifest of the overlay tree:
+
+[source,bash]
+----
+find overlay/ -type f -print0 \
+  | sort -z \
+  | xargs -0 sha256sum > overlay.sha256
+
+# Verify on target after mount
+sha256sum -c /run/network-config-overlay.sha256
+----
+
+== Output Structure and OverlayFS Deployment
+
+=== Why OverlayFS?
+
+Embedded Linux images typically use a read-only root partition (A/B or
+squashfs) to enable atomic updates and protect system integrity.
+However, network configuration files must reside in `/etc` or
+`/usr/lib`, which are on the read-only partition.
+
+OverlayFS solves this by stacking a writable _upper_ layer over the
+read-only _lower_ layer.
+The generated network configuration is placed into a dedicated overlay
+partition that is merged at boot, making the files appear in the
+expected filesystem locations without modifying the base image.
+
+=== Required rootfs-like directory layout
+
+The generated artefacts must be placed in a directory tree that mirrors
+the absolute paths expected on the target:
+
+[source]
+----
+overlay/                                ← root of the overlay upper layer
+├── etc/
+│   └── systemd/
+│       └── network/                   ← systemd-networkd config files
+│           ├── 10-eth1.link
+│           ├── 20-eth1.network
+│           ├── 20-eth1.2.netdev
+│           └── 30-eth1.2.network
+└── usr/
+    └── lib/
+        └── network-config/            ← iproute2 shell script
+            └── ip-config.sh
+----
+
+== Jinja2 Practical Reference for Network Templates
+
+Full language reference: https://jinja.palletsprojects.com/en/stable/templates/[Jinja2 Template Designer Documentation]. +
+Installation: `pip install Jinja2` (https://pypi.org/project/Jinja2/[PyPI page]).
+
+=== Accessing nested YANG data
+
+[source,jinja]
+----
+{# Get all enabled VLAN interfaces #}
+{% for iface in data['ietf-interfaces:interfaces']['interface'] %}
+{% if iface.type == "iana-if-type:l2vlan" and iface.enabled %}
+  VLAN name : {{ iface.name }}
+  Parent    : {{ iface['ietf-if-extensions:parent-interface'] }}
+  VLAN ID   : {{ iface['ietf-if-extensions:encapsulation']
+                      ['ietf-if-vlan-encapsulation:dot1q-vlan']
+                      ['outer-tag']['vlan-id'] }}
+{% endif %}
+{% endfor %}
+----
+
+=== Handling optional keys safely
+
+[source,jinja]
+----
+{# Use the 'in' operator before accessing a potentially absent key #}
+{% if 'ietf-if-extensions:max-frame-size' in iface %}
+MTUBytes={{ iface['ietf-if-extensions:max-frame-size'] }}
+{% endif %}
+
+{# Or use the default filter #}
+MTUBytes={{ iface.get('ietf-if-extensions:max-frame-size', 1500) }}
+----
+
+=== String transformation
+
+[source,jinja]
+----
+{# MAC address stored with hyphens in YANG, colon-separated required by ip/systemd #}
+MACAddress={{ iface['ietf-if-ethernet-like:ethernet-like']['mac-address'] | replace('-', ':') }}
+----
+
+=== Cross-interface lookup (parent → VLAN list)
+
+[source,jinja]
+----
+{# Emit VLAN= entries for all VLANs belonging to this parent #}
+{% for vlan in data['ietf-interfaces:interfaces']['interface'] %}
+{% if 'ietf-if-extensions:parent-interface' in vlan
+      and vlan['ietf-if-extensions:parent-interface'] == iface.name %}
+VLAN={{ vlan.name }}
+{% endif %}
+{% endfor %}
+----
+
+=== Whitespace control
+
+`{%- … -%}` strips leading/trailing whitespace and newlines.
+This is critical in INI-format output files where spurious blank lines
+can confuse parsers:
+
+[source,jinja]
+----
+{%- set iface = data['ietf-interfaces:interfaces']['interface'][0] -%}
+{%- if 'ietf-if-extensions:parent-interface' in iface -%}
+[NetDev]
+Name={{ iface.name }}
+{%- endif %}
+----
+
+=== Standards
+
+[cols="1,3", options="header"]
+|===
+| Standard
+| Title
+
+| https://standards.ieee.org/ieee/802.1Q/10323/[IEEE 802.1Q]
+| _Bridges and Bridged Networks_ — defines 802.1Q VLAN tagging (dot1q).
+
+| https://www.iana.org/assignments/ianaiftype-mib/ianaiftype-mib[IANA ifType MIB]
+| Authoritative registry for `iana-if-type` identity values used in
+  `ietf-interfaces` (e.g. `ethernetCsmacd`, `l2vlan`).
+|===
+
+=== Tools and Libraries
+
+[cols="1,3", options="header"]
+|===
+| Tool / Library
+| Reference
+
+| https://github.com/YangModels/yang[YangModels/yang]
+| Central GitHub repository of all standard IETF, IANA, IEEE, and vendor
+  YANG modules.
+
+| https://jinja.palletsprojects.com/[Jinja2]
+| Python template engine. `pip install Jinja2`.
+  https://jinja.palletsprojects.com/en/stable/templates/[Template Designer Documentation].
+
+| https://jqlang.org/[jq]
+| Lightweight JSON command-line processor used to slice the multi-node
+  configuration JSON.
+
+| https://www.freedesktop.org/software/systemd/man/latest/systemd.network.html[systemd.network(5)]
+| Man page for `.network` unit file format.
+
+| https://www.freedesktop.org/software/systemd/man/latest/systemd.netdev.html[systemd.netdev(5)]
+| Man page for `.netdev` unit file format.
+
+| https://www.freedesktop.org/software/systemd/man/latest/systemd.link.html[systemd.link(5)]
+| Man page for `.link` unit file format.
+
+| https://man7.org/linux/man-pages/man8/ip.8.html[ip(8)]
+| iproute2 `ip` command man page.
+
+| https://docs.kernel.org/filesystems/overlayfs.html[Linux OverlayFS documentation]
+| Kernel documentation for the OverlayFS union filesystem.
+|===
+
+== Glossary
+
+[cols="1,3"]
+|===
+| Term | Definition
+
+| **IETF**
+| Internet Engineering Task Force — standards body that defines the YANG data models used.
+
+| **INI file**
+| A simple key=value configuration file format used by `systemd` unit files.
+
+| **iproute2**
+| Linux package providing the `ip`, `ss`, `tc` commands for network management.
+
+| **Jinja2**
+| Python templating engine; templates are text files with embedded `{{ }}` and `{% %}` directives.
+
+| **NETCONF/YANG**
+| Network Configuration Protocol and its data modelling language used to describe network device state.
+
+| **OverlayFS**
+| Linux kernel filesystem that transparently merges a read-only lower layer with a writable upper layer.
+
+| **systemd-networkd**
+| `systemd` component managing network interfaces via `.network`, `.netdev`, `.link` files.
+
+| **VLAN**
+| Virtual LAN — IEEE 802.1Q tagged sub-interface carrying isolated L2 traffic on a shared physical link.
+
+| **YANG**
+| Yet Another Next Generation — data modelling language (RFC 6020/7950) used to describe NETCONF/RESTCONF data.
+|===

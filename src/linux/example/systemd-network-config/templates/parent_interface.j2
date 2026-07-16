@@ -1,0 +1,26 @@
+{%- for interface in data['ietf-interfaces:interfaces']['interface'] -%}
+     {%- if 'ietf-if-extensions:parent-interface' not in interface %}
+[Match]
+Name={{interface.name}}
+          {%- if interface.type == "iana-if-type:ethernetCsmacd" -%}
+               {%- if 'ietf-if-extensions:max-frame-size' in interface or ('ietf-if-ethernet-like:ethernet-like' in interface and 'mac-address' in interface['ietf-if-ethernet-like:ethernet-like']) %}
+
+[Link]
+                    {%- if 'ietf-if-ethernet-like:ethernet-like' in interface and 'mac-address' in interface['ietf-if-ethernet-like:ethernet-like'] %}
+MACAddress={{interface['ietf-if-ethernet-like:ethernet-like']['mac-address'] | replace('-', ':') }}
+                    {%- endif -%}
+                    {%- if 'ietf-if-extensions:max-frame-size' in interface %}
+MTUBytes={{interface['ietf-if-extensions:max-frame-size']}}
+                    {%- endif -%}
+               {%- endif -%}
+          {%- endif %}
+
+[Network]
+          {%- for vlan_interface in data['ietf-interfaces:interfaces']['interface'] -%}
+               {%- if 'ietf-if-extensions:parent-interface' in vlan_interface and vlan_interface['ietf-if-extensions:parent-interface'] == interface.name %}
+VLAN={{vlan_interface.name}}
+               {%- endif -%}
+          {%- endfor -%}
+
+{%- endif -%}
+{%- endfor %}

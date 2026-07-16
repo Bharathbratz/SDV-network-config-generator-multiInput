@@ -1,0 +1,19 @@
+{#-
+  Render a systemd .link file for a physical Ethernet interface named eth1
+  Input model: ietf-interfaces:interfaces
+-#}
+{%- for iface in data["ietf-interfaces:interfaces"]["interface"] %}
+{%- if iface.type == "iana-if-type:ethernetCsmacd"
+      and iface.enabled
+      and iface.name == "eth1" %}
+
+[Match]
+OriginalName=pfe0
+Type=ether
+
+[Link]
+Name={{ iface.name }}
+MTUBytes={{ iface["ietf-if-extensions:max-frame-size"] }}
+
+{%- endif %}
+{%- endfor %}
