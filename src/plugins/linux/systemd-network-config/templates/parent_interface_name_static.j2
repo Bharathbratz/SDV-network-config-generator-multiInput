@@ -1,0 +1,22 @@
+{#-
+  parent_interface_name_static.j2
+  Generates a systemd .link file for each physical Ethernet interface.
+  The .link file is processed by udev to rename the kernel NIC name to the
+  IETF-configured interface name and to set the MTU.
+
+  Output path (rootfs overlay): /etc/systemd/network/10-<name>.link
+  Rendered once per physical interface (generator.py iterates and writes per-file).
+-#}
+{% for iface in data['ietf-interfaces:interfaces']['interface'] %}
+{% if iface.type == "iana-if-type:ethernetCsmacd" and iface.enabled %}
+[Match]
+OriginalName=pfe0
+Type=ether
+
+[Link]
+Name={{ iface.name }}
+{% if 'ietf-if-extensions:max-frame-size' in iface %}
+MTUBytes={{ iface['ietf-if-extensions:max-frame-size'] }}
+{% endif %}
+{% endif %}
+{% endfor %}

@@ -20,9 +20,11 @@ from src.core.generator import generate_sdn_config
 @click.option(
     "--output",
     "output_path",
-    required=True,
+    required=False,
+    default="output",
+    show_default=True,
     type=str,
-    help="Path to output directory",
+    help="Path to output directory (default: output/ at project root)",
 )
 @click.option(
     "--os",

@@ -1,0 +1,45 @@
+{#-
+  vlan_network.j2
+  Generates a systemd .network file for a single VLAN sub-interface.
+  Configures the IPv4 address, MTU, and any static routes whose
+  outgoing-interface matches (or, for routes without an outgoing-interface
+  field, whose next-hop is reachable via this VLAN).
+
+  The template expects `iface` to be set by the caller (generator.py
+  calls render with `iface=<the vlan interface dict>`).
+
+  Output path (rootfs overlay): /etc/systemd/network/<n>-<name>.network
+-#}
+{% if 'ietf-if-extensions:parent-interface' in iface %}
+[Match]
+Name={{ iface.name }}
+{% if 'ietf-ip:ipv4' in iface and 'address' in iface['ietf-ip:ipv4'] %}
+
+[Network]
+{% for addr in iface['ietf-ip:ipv4']['address'] %}
+Address={{ addr['ip'] }}/{{ addr['prefix-length'] }}
+{% endfor %}
+{% endif %}
+{% if 'ietf-if-extensions:max-frame-size' in iface %}
+
+[Link]
+MTUBytes={{ iface['ietf-if-extensions:max-frame-size'] }}
+{% endif %}
+{% if 'ietf-routing:routing' in data %}
+{% for protocol in data['ietf-routing:routing']['control-plane-protocols']['control-plane-protocol'] %}
+{% if 'static-routes' in protocol and 'ietf-ipv4-unicast-routing:ipv4' in protocol['static-routes'] %}
+{% for route in protocol['static-routes']['ietf-ipv4-unicast-routing:ipv4']['route'] %}
+{% if 'destination-prefix' in route and 'next-hop' in route and 'next-hop-address' in route['next-hop'] %}
+{% set outgoing = route['next-hop'].get('outgoing-interface', '') %}
+{% if outgoing == iface.name %}
+
+[Route]
+Gateway={{ route['next-hop']['next-hop-address'] }}
+Destination={{ route['destination-prefix'] }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endif %}

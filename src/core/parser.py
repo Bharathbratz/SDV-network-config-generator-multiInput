@@ -145,7 +145,11 @@ def _parse_json_data(data: dict) -> ParsedConfig:
     if "ietf-interfaces:interfaces" in data:
         # IETF/RFC namespaced payload -> normalize into internal model.
         model = _normalize_ietf(data)
-        return ParsedConfig(model=model, source_format="ietf", source_config=model)
+        # Preserve the original IETF JSON so plugins that work directly with
+        # the IETF data model (e.g. LinuxPlugin) can retrieve it without
+        # re-parsing the file.
+        model["_raw_ietf"] = data
+        return ParsedConfig(model=model, source_format="ietf", source_config=data)
 
     # Legacy flat format
     config = data.get("network-config", data)

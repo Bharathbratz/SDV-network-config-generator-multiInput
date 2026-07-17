@@ -3,6 +3,7 @@ pyproject.toml
 setup.cfg
 src/__init__.py
 src/main.py
+src/core/generator.py
 src/core/mapper.py
 src/core/model.py
 src/core/parser.py
@@ -28,3 +29,8 @@ src/sdn_config_generator.egg-info/entry_points.txt
 src/sdn_config_generator.egg-info/requires.txt
 src/sdn_config_generator.egg-info/top_level.txt
 tests/test.py
+tests/test_cli_negative_paths.py
+tests/test_generator_unit.py
+tests/test_parser_unit.py
+tests/test_registry_unit.py
+tests/test_validator_unit.py

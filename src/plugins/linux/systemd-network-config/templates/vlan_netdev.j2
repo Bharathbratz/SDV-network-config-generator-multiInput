@@ -1,0 +1,19 @@
+{#-
+  vlan_netdev.j2
+  Generates a systemd .netdev file for a single VLAN sub-interface.
+  This template is rendered once per VLAN interface; the caller is
+  responsible for selecting the correct interface from the list.
+
+  The template expects `iface` to be set by the caller (generator.py
+  calls render with `iface=<the vlan interface dict>`).
+
+  Output path (rootfs overlay): /etc/systemd/network/<n>-<name>.netdev
+-#}
+{% if 'ietf-if-extensions:parent-interface' in iface and iface.type == "iana-if-type:l2vlan" %}
+[NetDev]
+Name={{ iface.name }}
+Kind=vlan
+
+[VLAN]
+Id={{ iface['ietf-if-extensions:encapsulation']['ietf-if-vlan-encapsulation:dot1q-vlan']['outer-tag']['vlan-id'] }}
+{% endif %}

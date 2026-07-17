@@ -1,0 +1,33 @@
+{#-
+  parent_interface.j2
+  Generates a systemd .network file for each physical (parent) Ethernet interface.
+  Sets the MAC address, MTU and enumerates all VLAN sub-interfaces that belong to
+  this parent so systemd-networkd creates them automatically.
+
+  Output path (rootfs overlay): /etc/systemd/network/20-<name>.network
+  Rendered once for the whole interface list; generator.py writes a single file.
+-#}
+{% for iface in data['ietf-interfaces:interfaces']['interface'] %}
+{% if 'ietf-if-extensions:parent-interface' not in iface and iface.type == "iana-if-type:ethernetCsmacd" %}
+[Match]
+Name={{ iface.name }}
+{% if 'ietf-if-ethernet-like:ethernet-like' in iface and 'mac-address' in iface['ietf-if-ethernet-like:ethernet-like']
+      or 'ietf-if-extensions:max-frame-size' in iface %}
+
+[Link]
+{% if 'ietf-if-ethernet-like:ethernet-like' in iface and 'mac-address' in iface['ietf-if-ethernet-like:ethernet-like'] %}
+MACAddress={{ iface['ietf-if-ethernet-like:ethernet-like']['mac-address'] | replace('-', ':') }}
+{% endif %}
+{% if 'ietf-if-extensions:max-frame-size' in iface %}
+MTUBytes={{ iface['ietf-if-extensions:max-frame-size'] }}
+{% endif %}
+{% endif %}
+
+[Network]
+{% for vlan in data['ietf-interfaces:interfaces']['interface'] %}
+{% if 'ietf-if-extensions:parent-interface' in vlan and vlan['ietf-if-extensions:parent-interface'] == iface.name %}
+VLAN={{ vlan.name }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
