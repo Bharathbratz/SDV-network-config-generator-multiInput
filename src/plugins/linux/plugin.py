@@ -51,7 +51,10 @@ class LinuxPlugin(BasePlugin):
 
         # Prefer the preserved raw IETF JSON; fall back to the normalised model
         # for backwards-compatibility with non-IETF inputs.
-        raw_ietf = config.get("_raw_ietf", config)
+        # `config` (and its `_raw_ietf` payload) may be the same object shared
+        # across multiple plugins when generating for all OS targets, so work
+        # on a shallow copy to avoid mutating state other plugins still need.
+        raw_ietf = dict(config.get("_raw_ietf", config))
 
         # Remove internal bookkeeping key before passing to templates.
         raw_ietf.pop("_raw_ietf", None)

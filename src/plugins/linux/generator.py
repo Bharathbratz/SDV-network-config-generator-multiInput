@@ -88,7 +88,7 @@ def _priority(index: int, base: int = 30) -> str:
     return f"{base + index:02d}"
 
 
-def generate_systemd(context: dict, overlay_root: Path, input_name: str) -> list[Path]:
+def generate_systemd(context: dict, overlay_root: Path) -> list[Path]:
     """Render all systemd-networkd unit files into *overlay_root*.
 
     Returns the list of written file paths.
